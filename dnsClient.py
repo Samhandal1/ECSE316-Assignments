@@ -2,12 +2,74 @@ import argparse
 import sys
 import time
 import socket
+import random
 
 BUFFER = 1024
 
-def build_packet(server_name, query_type):
+def parse_packet(server_name, query_type):
+
     packet = ""
-    return packet
+
+    ### PACKET HEADER ###
+
+    # ID (16-bit identifier assigned by the client)
+    id = random.randint(0, 0xFFFF)
+    packet += format(id, '04x')
+
+    # FLAGS (don't vary for query)
+    packet += "0100"
+
+    # QDCOUNT (one question, will always be 1)
+    packet += "0001"
+
+    # ANCOUNT (No records in the Answer section)
+    packet += "0000"
+
+    # NSCOUNT (No records in the Authoritative section)
+    packet += "0000"
+
+    # ARCOUNT (No records in the Additional section)
+    packet += "0000"
+
+    ### PACKET QUESTION ###
+
+    # QNAME
+    # domain names are represented as lists of labels
+    qname = ""
+    server_name_array = server_name.split('.')
+
+    for label in server_name_array:
+
+        # each label is preceded by a single byte giving the number of ASCII characters used in the label
+        num_ascii_char = len(label)
+        qname += format(num_ascii_char, '02x')
+
+        # each character is coded using 8-bit ASCII
+        for letter in label:
+            qname += format(ord(letter), '02x')
+
+    # To signal the end of a domain name, one last byte is written with value 0
+    qname += "00"
+    packet += qname
+
+    # QTYPE (16-bit code specifying the type of query)
+    if (query_type == "NS"):
+        # 0x0002 for a type-NS query (name server)
+        qtype = "0002"
+    elif (query_type == "MX"):
+        # 0x000f for a type-MX query (mail server)
+        qtype = "000f"
+    else:
+        # 0x0001 for a type-A query (host address)
+        qtype = "0001"
+    
+    packet += qtype
+
+    # QCLASS (always use 0x0001 in this field, representing an Internet address)
+    packet += "0001"
+
+    byte_sequence = bytes.fromhex(packet)
+    return byte_sequence
 
 def send_dns_query(server, name, query_type, timeout, max_retries, port):
 
@@ -26,7 +88,7 @@ def send_dns_query(server, name, query_type, timeout, max_retries, port):
     for i in range(max_retries + 1):
         try:
             # send
-            packet = build_packet(name, query_type)
+            packet = parse_packet(name, query_type)
             clientSocket.sendto(packet, (server, port))
 
             # receive
