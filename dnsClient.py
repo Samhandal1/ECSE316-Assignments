@@ -33,6 +33,7 @@ def parse_packet(server_name, query_type):
     packet += "0000"
 
     ### PACKET QUESTION ###
+    qlen = 0
 
     # QNAME
     # domain names are represented as lists of labels
@@ -44,13 +45,16 @@ def parse_packet(server_name, query_type):
         # each label is preceded by a single byte giving the number of ASCII characters used in the label
         num_ascii_char = len(label)
         qname += format(num_ascii_char, '02x')
+        qlen += 2
 
         # each character is coded using 8-bit ASCII
         for letter in label:
             qname += format(ord(letter), '02x')
+            qlen += 2
 
     # To signal the end of a domain name, one last byte is written with value 0
     qname += "00"
+    qlen += 2
     packet += qname
 
     # QTYPE (16-bit code specifying the type of query)
@@ -65,13 +69,15 @@ def parse_packet(server_name, query_type):
         qtype = "0001"
     
     packet += qtype
+    qlen += 4
 
     # QCLASS (always use 0x0001 in this field, representing an Internet address)
     packet += "0001"
+    qlen += 4
 
     # convert to a bytes object
     byte_sequence = bytes.fromhex(packet)
-    return byte_sequence, hex_id
+    return byte_sequence, hex_id, qlen
 
 def send_dns_query(server, name, query_type, timeout, max_retries, port):
 
@@ -90,7 +96,7 @@ def send_dns_query(server, name, query_type, timeout, max_retries, port):
     for i in range(max_retries + 1):
         try:
             # send
-            packet, id = parse_packet(name, query_type)
+            packet, id, qlen = parse_packet(name, query_type)
             clientSocket.sendto(packet, (server, port))
 
             # receive
@@ -100,7 +106,7 @@ def send_dns_query(server, name, query_type, timeout, max_retries, port):
             # maybe only when we parse
             print("Response received after " + str(curr_time) + " seconds (" + str(i) + " retries)")
             clientSocket.close()
-            return response, id
+            return response, id, qlen
 
         except socket.timeout:
             if (i < max_retries):
@@ -111,7 +117,7 @@ def send_dns_query(server, name, query_type, timeout, max_retries, port):
                 sys.exit(1)
 
 # do we retry or terminate???
-def parse_dns_response(result, id):
+def parse_dns_response(result, id, qlen):
 
     # convert a bytes object to a string representing its hexadecimal representation
     hex_string = result.hex()
@@ -215,20 +221,69 @@ def parse_dns_response(result, id):
 
 
     ### QUESTION ###
-    # QNAME
-    question_string = hex_string[24:]
-    dom_name_index = [24, (question_string.find("00") + 24)]
-    dom_name = hex_string[24:(dom_name_index[1] + 1)]
+    # should be identical to query...
+    question_string = hex_string[24:qlen]
 
-    # QTYPE
-    qtype_index = [(dom_name_index[1] + 1), (dom_name_index[1] + 4)]
+    # # QNAME
+    # question_string = hex_string[24:]
+    # dom_name_index = [24, (question_string.find("00") + 24)]
+    # dom_name = hex_string[24:(dom_name_index[1] + 1)]
 
-    # QCLASS
-    qclass_index = [(qtype_index[1] + 1), (qtype_index[1] + 4)]
-    question_string = hex_string[24:(qclass_index[1] + 1)]
+    # # QTYPE
+    # qtype_index = [(dom_name_index[1] + 1), (dom_name_index[1] + 4)]
+
+    # # QCLASS
+    # qclass_index = [(qtype_index[1] + 1), (qtype_index[1] + 4)]
+    # question_string = hex_string[24:(qclass_index[1] + 1)]
 
     ### ANSWER ###
-    answer_string = hex_string[(qclass_index[1] + 1):]
+    answer_string = hex_string[qlen:]
+    domname_type, name = packetCompression(answer_string)
+
+def packetCompression(hexdump):
+
+    domname_type = ""
+
+    # CASE 1 - POINTER
+    hex_to_int = int(hexdump, 16)               # convert to binary to check first two bits
+    binary_string = bin(hex_to_int)[2:]         # Convert integer to binary string and remove "0b" prefix
+
+    if binary_string[:2] == "11":
+
+        # first two bits to 1 allows pointers to be distinguished from labels
+        domname_type = "pointer"
+
+        # convert back to hex
+        bin_to_int = int(binary_string[:16], 2)
+        hex_pointer = hex(bin_to_int)[2:]
+
+        return domname_type, hex_pointer
+    
+    indx = 0
+    while indx < len(hexdump):
+
+        # jump to next label
+        ascii_to_check = hexdump[indx:(indx + 2)]
+        count_to_next_label = int(ascii_to_check, 16)
+        indx_to_check = (indx + 2) + (count_to_next_label * 2)
+
+        # CASE 2 - a sequence of labels ending with a zero octet
+        ascii_to_check = hexdump[indx_to_check:(indx_to_check + 2)]
+        if ascii_to_check == "00":
+
+            domname_type = "label-00"
+            return domname_type, hexdump[:(indx_to_check + 2)]
+        
+        # CASE 3 - a sequence of labels ending with a pointer
+        hex_to_int = int(ascii_to_check, 16)                # convert to binary to check first two bits
+        binary_string = bin(hex_to_int)[2:]                 # Convert integer to binary string and remove "0b" prefix
+        if binary_string[:2] == "11":
+
+            domname_type = "label-p"
+            return domname_type, hexdump[:(indx_to_check + 2)]
+
+        # increment and continue
+        indx = indx_to_check
 
 
 def main():
@@ -261,8 +316,8 @@ def main():
     # ERROR <tab> Incorrect input syntax: [description of specific problem] ERROR <tab>
 
     # send and parse result
-    result, id = send_dns_query(args.server, args.name, query_type, args.timeout, args.max_retries, args.port)
-    parse_dns_response(result, id)
+    result, id, qlen = send_dns_query(args.server, args.name, query_type, args.timeout, args.max_retries, args.port)
+    parse_dns_response(result, id, qlen)
 
 if __name__ == "__main__":
     main()
