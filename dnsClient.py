@@ -58,6 +58,7 @@ def parse_packet(server_name, query_type):
     packet += qname
 
     # QTYPE (16-bit code specifying the type of query)
+    qtype = ""
     if (query_type == "NS"):
         # 0x0002 for a type-NS query (name server)
         qtype = "0002"
@@ -122,7 +123,9 @@ def parse_dns_response(result, id, qlen):
     # convert a bytes object to a string representing its hexadecimal representation
     hex_string = result.hex()
 
-    ### HEADER ###
+    ########################################################################
+    ### HEADER #############################################################
+    ########################################################################
 
     # ID
     # query header id must match response header id
@@ -147,18 +150,16 @@ def parse_dns_response(result, id, qlen):
     # AA
     # report whether or not the response you receive is authoritative
     aa = binary_flag[5]
+    isAuthoritative = "nonauth"
     if aa == 1:
-        isAuthoritative = True
-    else:
-        isAuthoritative = False
+        isAuthoritative = "auth"
 
     # TC
     # indicates whether or not this message was truncated
     tc = binary_flag[6]
+    isTruncated = False
     if tc == 1:
         isTruncated = True
-    else:
-        isTruncated = False
 
     # RD
     # bit set in the request message
@@ -219,8 +220,10 @@ def parse_dns_response(result, id, qlen):
     else:
         print("NOTFOUND")
 
+    ######################################################
+    ### QUESTION #########################################
+    ######################################################
 
-    ### QUESTION ###
     # should be identical to query...
     question_string = hex_string[24:qlen]
 
@@ -236,9 +239,356 @@ def parse_dns_response(result, id, qlen):
     # qclass_index = [(qtype_index[1] + 1), (qtype_index[1] + 4)]
     # question_string = hex_string[24:(qclass_index[1] + 1)]
 
-    ### ANSWER ###
+    ####################################################################
+    ### ANSWER #########################################################
+    ####################################################################
+
+    # NAME
     answer_string = hex_string[qlen:]
     domname_type, name = packetCompression(answer_string)
+
+    # TYPE
+    start_index_type = len(name) + qlen
+    type_answer = hex_string[start_index_type:(start_index_type + 4)]
+
+
+    # CLASS
+    start_index_class = start_index_type + 4
+    class_answer = hex_string[start_index_class:(start_index_class + 4)]
+    if class_answer != "0001":
+        print("ERROR    Unexpected response: query class not Internet address.")
+
+    # TTL
+    # number of seconds that this record may be cached before it should be discarded
+    start_index_ttl = start_index_class + 4
+    ttl = hex_string[start_index_ttl:(start_index_ttl + 8)]
+    seconds_can_cache = int(ttl, 16)
+
+    # RDLENGTH
+    start_index_rdlength = start_index_ttl + 8
+    rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
+    num_octets = int(rdlength, 16)
+
+    # RDATA
+    start_index_rdata = start_index_rdlength + 4
+    num_records = int(qdcount, 16)
+
+    # A (IP address) records
+    if type_answer == "0001":
+        curr_ind = start_index_rdata
+        for i in range(num_records):
+
+            # for each record, print the IP address
+            ip = hex_string[curr_ind:(curr_ind + 8)]
+            ip_string = str(int(ip[0:2], 16)) + "." + str(int(ip[2:4], 16)) + "." + str(int(ip[4:6], 16)) + "." + str(int(ip[6:8], 16))
+            print("IP   " + ip_string + "   " + seconds_can_cache + "   " + isAuthoritative)
+            curr_ind = curr_ind + 8
+
+    # NS (name server) record
+    elif type_answer == "0002" or type_answer == "0005":
+        curr_ind = start_index_rdata
+
+        for i in range(num_records):
+
+            ns_type, name_rdata = packetCompression(hex_string[curr_ind:])
+
+            if ns_type == "pointer":
+
+                # convery pointer to binary
+                binary_pointer = bin(int(name_rdata, 16))[2:]
+                # find offset
+                offset = binary_pointer[2:]
+                # go to offset, and convert series of labels to string
+                ns = label_to_string(hex_string[offset:])
+
+                if type_answer == "0002":
+                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                else:
+                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            if ns_type == "label-00":
+
+                # just convert to string
+                ns = label_to_string(name_rdata)
+                
+                if type_answer == "0002":
+                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                else:
+                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                
+            if ns_type == "label-p":
+
+                # add label half to nameserver
+                label_half = name_rdata[:-4]
+                ns = label_to_string(label_half + "00")
+                ns += "." 
+
+                # add pointer half to nameserver
+                pointer_half = name_rdata[-4:]
+                binary_pointer = bin(int(pointer_half, 16))[2:]
+                offset = binary_pointer[2:]
+                ns += label_to_string(hex_string[offset:])
+
+                if type_answer == "0002":
+                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                else:
+                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            curr_ind = curr_ind + len(name_rdata)
+
+    # MX (mail server) records
+    elif type_answer == "000f":
+
+        curr_ind = start_index_rdata
+
+        for i in range(num_records):
+
+            # extract preferance
+            preference = int(hex_string[curr_ind:(curr_ind + 4)], 16)
+            curr_ind = curr_ind = 4
+
+            ms_type, name_rdata = packetCompression(hex_string[curr_ind:])
+
+            if ms_type == "pointer":
+
+                # convery pointer to binary
+                binary_pointer = bin(int(name_rdata, 16))[2:]
+                # find offset
+                offset = binary_pointer[2:]
+                # go to offset, and convert series of labels to string
+                ms = label_to_string(hex_string[offset:])
+
+                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            if ms_type == "label-00":
+
+                # just convert to string
+                ms = label_to_string(name_rdata)
+                
+                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                
+            if ms_type == "label-p":
+
+                # add label half to nameserver
+                label_half = name_rdata[:-4]
+                ms = label_to_string(label_half + "00")
+                ms += "." 
+
+                # add pointer half to nameserver
+                pointer_half = name_rdata[-4:]
+                binary_pointer = bin(int(pointer_half, 16))[2:]
+                offset = binary_pointer[2:]
+                ms += label_to_string(hex_string[offset:])
+
+                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            curr_ind = curr_ind + len(name_rdata)
+
+    else:
+        print("ERROR    Unexpected response: unknown type error.")
+
+    ######################################################
+    ### Authority, SKIP ##################################
+    ######################################################
+
+    # NAME
+    # skip through by finding end of answer rdata
+    start_index_autority = start_index_rdata + (num_octets * 2)
+    autority_string = hex_string[start_index_autority:]
+    domname_type, name_autority = packetCompression(autority_string)
+
+    # TYPE
+    start_index_type = len(name_autority) + start_index_autority
+
+    # CLASS
+    start_index_class = start_index_type + 4
+
+    # TTL
+    start_index_ttl = start_index_class + 4
+
+    # RDLENGTH
+    start_index_rdlength = start_index_ttl + 8
+    rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
+    num_octets = int(rdlength, 16)
+
+    # RDATA
+    start_index_rdata = start_index_rdlength + 4
+
+    ######################################################
+    ### Additional #######################################
+    ######################################################
+
+    start_index_additional = start_index_rdata + (num_octets * 2)
+
+    # NAME
+    Additional_string = hex_string[start_index_additional:]
+    domname_type, name_additional = packetCompression(Additional_string)
+
+    # TYPE
+    start_index_type = len(name_additional) + start_index_additional
+    type_answer = hex_string[start_index_type:(start_index_type + 4)]
+
+
+    # CLASS
+    start_index_class = start_index_type + 4
+    class_answer = hex_string[start_index_class:(start_index_class + 4)]
+    if class_answer != "0001":
+        print("ERROR    Unexpected response: query class not Internet address.")
+
+    # TTL
+    # number of seconds that this record may be cached before it should be discarded
+    start_index_ttl = start_index_class + 4
+    ttl = hex_string[start_index_ttl:(start_index_ttl + 8)]
+    seconds_can_cache = int(ttl, 16)
+
+    # RDLENGTH
+    start_index_rdlength = start_index_ttl + 8
+    rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
+    num_octets = int(rdlength, 16)
+
+    # RDATA
+    start_index_rdata = start_index_rdlength + 4
+    num_records = int(qdcount, 16)
+
+    # A (IP address) records
+    if type_answer == "0001":
+        curr_ind = start_index_rdata
+        for i in range(num_records):
+
+            # for each record, print the IP address
+            ip = hex_string[curr_ind:(curr_ind + 8)]
+            ip_string = str(int(ip[0:2], 16)) + "." + str(int(ip[2:4], 16)) + "." + str(int(ip[4:6], 16)) + "." + str(int(ip[6:8], 16))
+            print("IP   " + ip_string + "   " + seconds_can_cache + "   " + isAuthoritative)
+            curr_ind = curr_ind + 8
+
+    # NS (name server) record
+    elif type_answer == "0002" or type_answer == "0005":
+        curr_ind = start_index_rdata
+
+        for i in range(num_records):
+
+            ns_type, name_rdata = packetCompression(hex_string[curr_ind:])
+
+            if ns_type == "pointer":
+
+                # convery pointer to binary
+                binary_pointer = bin(int(name_rdata, 16))[2:]
+                # find offset
+                offset = binary_pointer[2:]
+                # go to offset, and convert series of labels to string
+                ns = label_to_string(hex_string[offset:])
+
+                if type_answer == "0002":
+                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                else:
+                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            if ns_type == "label-00":
+
+                # just convert to string
+                ns = label_to_string(name_rdata)
+                
+                if type_answer == "0002":
+                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                else:
+                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                
+            if ns_type == "label-p":
+
+                # add label half to nameserver
+                label_half = name_rdata[:-4]
+                ns = label_to_string(label_half + "00")
+                ns += "." 
+
+                # add pointer half to nameserver
+                pointer_half = name_rdata[-4:]
+                binary_pointer = bin(int(pointer_half, 16))[2:]
+                offset = binary_pointer[2:]
+                ns += label_to_string(hex_string[offset:])
+
+                if type_answer == "0002":
+                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                else:
+                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            curr_ind = curr_ind + len(name_rdata)
+
+    # MX (mail server) records
+    elif type_answer == "000f":
+
+        curr_ind = start_index_rdata
+
+        for i in range(num_records):
+
+            # extract preferance
+            preference = int(hex_string[curr_ind:(curr_ind + 4)], 16)
+            curr_ind = curr_ind = 4
+
+            ms_type, name_rdata = packetCompression(hex_string[curr_ind:])
+
+            if ms_type == "pointer":
+
+                # convery pointer to binary
+                binary_pointer = bin(int(name_rdata, 16))[2:]
+                # find offset
+                offset = binary_pointer[2:]
+                # go to offset, and convert series of labels to string
+                ms = label_to_string(hex_string[offset:])
+
+                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            if ms_type == "label-00":
+
+                # just convert to string
+                ms = label_to_string(name_rdata)
+                
+                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                
+            if ms_type == "label-p":
+
+                # add label half to nameserver
+                label_half = name_rdata[:-4]
+                ms = label_to_string(label_half + "00")
+                ms += "." 
+
+                # add pointer half to nameserver
+                pointer_half = name_rdata[-4:]
+                binary_pointer = bin(int(pointer_half, 16))[2:]
+                offset = binary_pointer[2:]
+                ms += label_to_string(hex_string[offset:])
+
+                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+
+            curr_ind = curr_ind + len(name_rdata)
+
+    else:
+        print("ERROR    Unexpected response: unknown type error.")
+
+
+def label_to_string(hexdump):
+
+    name = ""
+    indx = 0
+
+    while indx < len(hexdump):
+
+        # jump to next label
+        ascii_to_check = hexdump[indx:(indx + 2)]
+        num_letters = int(ascii_to_check, 16)
+        indx = indx + 2
+
+        for i in range(num_letters):
+            # Convert integer to ASCII character
+            letter = hexdump[indx:(indx + 2)]
+            ascii_character = chr(int(letter, 16))
+            name += ascii_character
+            indx = indx + 2
+
+        if hexdump[indx:(indx + 2)] == "00":
+            return name
+        else:
+            name += "."
+
 
 def packetCompression(hexdump):
 
@@ -252,12 +602,7 @@ def packetCompression(hexdump):
 
         # first two bits to 1 allows pointers to be distinguished from labels
         domname_type = "pointer"
-
-        # convert back to hex
-        bin_to_int = int(binary_string[:16], 2)
-        hex_pointer = hex(bin_to_int)[2:]
-
-        return domname_type, hex_pointer
+        return domname_type, hexdump[:4]
     
     indx = 0
     while indx < len(hexdump):
@@ -280,7 +625,7 @@ def packetCompression(hexdump):
         if binary_string[:2] == "11":
 
             domname_type = "label-p"
-            return domname_type, hexdump[:(indx_to_check + 2)]
+            return domname_type, hexdump[:(indx_to_check + 4)]
 
         # increment and continue
         indx = indx_to_check
