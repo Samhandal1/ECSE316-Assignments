@@ -270,7 +270,7 @@ def parse_dns_response(result, id, qlen):
 
     # RDATA
     start_index_rdata = start_index_rdlength + 4
-    num_records = int(qdcount, 16)
+    num_records = int(ancount, 16)
 
     # A (IP address) records
     if type_answer == "0001":
@@ -456,7 +456,7 @@ def parse_dns_response(result, id, qlen):
 
     # RDATA
     start_index_rdata = start_index_rdlength + 4
-    num_records = int(qdcount, 16)
+    num_records = int(arcount, 16)
 
     # A (IP address) records
     if type_answer == "0001":
@@ -530,7 +530,7 @@ def parse_dns_response(result, id, qlen):
 
             # extract preferance
             preference = int(hex_string[curr_ind:(curr_ind + 4)], 16)
-            curr_ind = curr_ind = 4
+            curr_ind = curr_ind + 4
 
             ms_type, name_rdata = packetCompression(hex_string[curr_ind:])
 
