@@ -3,6 +3,7 @@ import sys
 import time
 import socket
 import random
+import re
 
 BUFFER = 1024
 
@@ -103,6 +104,7 @@ def send_dns_query(server, name, query_type, timeout, max_retries, port):
             # receive
             response, response_address = clientSocket.recvfrom(BUFFER)
             curr_time = time.perf_counter() - timer
+            # print(str(response) + " " + str(response_address))
 
             # maybe only when we parse
             print("Response received after " + str(curr_time) + " seconds (" + str(i) + " retries)")
@@ -122,6 +124,7 @@ def parse_dns_response(result, id, qlen):
 
     # convert a bytes object to a string representing its hexadecimal representation
     hex_string = result.hex()
+    # print(hex_string)
 
     ########################################################################
     ### HEADER #############################################################
@@ -141,7 +144,7 @@ def parse_dns_response(result, id, qlen):
     # QR
     # check if QR bit is 1 (response)
     qr = binary_flag[0]
-    if qr != 1:
+    if qr != "1":
         print("ERROR    Unexpected response: expected response, but got type query.")
 
     # OPCODE
@@ -168,7 +171,7 @@ def parse_dns_response(result, id, qlen):
     # RA
     # bit set or cleared by the server in a response message to indicate whether or not recursive queries are supported
     ra = binary_flag[8]
-    if ra != 1:
+    if ra != "1":
         print("ERROR    Unexpected response: server does not support recursive queries.")
 
     # Z
@@ -199,12 +202,6 @@ def parse_dns_response(result, id, qlen):
     # ANCOUNT
     # number of resource records in the answer section
     ancount = hex_string[12:16]
-    num_answers = 0
-    if ancount != "0000":
-        num_answers = int(ancount, 16)
-        print("*** Answer Section (" + str(num_answers) + " records) ***")
-    else:
-        print("NOTFOUND")
 
     # NSCOUNT
     # number of name server resource records in the Authority section - IGNORE
@@ -213,19 +210,13 @@ def parse_dns_response(result, id, qlen):
     # ARCOUNT
     # number of resource records in the Additional records section
     arcount = hex_string[20:24]
-    num_additional = 0
-    if arcount != "0000":
-        num_additional = int(arcount, 16)
-        print("*** Additional Section (" + str(num_additional) + " records) ***")
-    else:
-        print("NOTFOUND")
 
     ######################################################
     ### QUESTION #########################################
     ######################################################
 
     # should be identical to query...
-    question_string = hex_string[24:qlen]
+    question_string = hex_string[24:(24 + qlen)]
 
     # # QNAME
     # question_string = hex_string[24:]
@@ -243,12 +234,20 @@ def parse_dns_response(result, id, qlen):
     ### ANSWER #########################################################
     ####################################################################
 
+    num_answers = 0
+    if ancount != "0000":
+        num_answers = int(ancount, 16)
+        print("*** Answer Section (" + str(num_answers) + " records) ***")
+    else:
+        print("NOTFOUND - Answer Section")
+        quit(0)
+
     # NAME
-    answer_string = hex_string[qlen:]
+    answer_string = hex_string[(24 + qlen):]
     domname_type, name = packetCompression(answer_string)
 
     # TYPE
-    start_index_type = len(name) + qlen
+    start_index_type = len(name) + (24 + qlen)
     type_answer = hex_string[start_index_type:(start_index_type + 4)]
 
 
@@ -281,7 +280,7 @@ def parse_dns_response(result, id, qlen):
             # for each record, print the IP address
             ip = hex_string[curr_ind:(curr_ind + 8)]
             ip_string = str(int(ip[0:2], 16)) + "." + str(int(ip[2:4], 16)) + "." + str(int(ip[4:6], 16)) + "." + str(int(ip[6:8], 16))
-            print("IP   " + ip_string + "   " + seconds_can_cache + "   " + isAuthoritative)
+            print("IP   " + ip_string + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
             curr_ind = curr_ind + 8
 
     # NS (name server) record
@@ -302,9 +301,9 @@ def parse_dns_response(result, id, qlen):
                 ns = label_to_string(hex_string[offset:])
 
                 if type_answer == "0002":
-                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 else:
-                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             if ns_type == "label-00":
 
@@ -312,9 +311,9 @@ def parse_dns_response(result, id, qlen):
                 ns = label_to_string(name_rdata)
                 
                 if type_answer == "0002":
-                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 else:
-                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 
             if ns_type == "label-p":
 
@@ -330,9 +329,9 @@ def parse_dns_response(result, id, qlen):
                 ns += label_to_string(hex_string[offset:])
 
                 if type_answer == "0002":
-                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 else:
-                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             curr_ind = curr_ind + len(name_rdata)
 
@@ -345,7 +344,7 @@ def parse_dns_response(result, id, qlen):
 
             # extract preferance
             preference = int(hex_string[curr_ind:(curr_ind + 4)], 16)
-            curr_ind = curr_ind = 4
+            curr_ind = curr_ind + 4
 
             ms_type, name_rdata = packetCompression(hex_string[curr_ind:])
 
@@ -358,14 +357,14 @@ def parse_dns_response(result, id, qlen):
                 # go to offset, and convert series of labels to string
                 ms = label_to_string(hex_string[offset:])
 
-                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             if ms_type == "label-00":
 
                 # just convert to string
                 ms = label_to_string(name_rdata)
                 
-                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 
             if ms_type == "label-p":
 
@@ -380,16 +379,25 @@ def parse_dns_response(result, id, qlen):
                 offset = binary_pointer[2:]
                 ms += label_to_string(hex_string[offset:])
 
-                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             curr_ind = curr_ind + len(name_rdata)
 
     else:
         print("ERROR    Unexpected response: unknown type error.")
 
+
     ######################################################
     ### Authority, SKIP ##################################
     ######################################################
+
+    num_additional = 0
+    if arcount != "0000":
+        num_additional = int(arcount, 16)
+        print("*** Additional Section (" + str(num_additional) + " records) ***")
+    else:
+        print("NOTFOUND - Additional Section")
+        quit(0)
 
     # NAME
     # skip through by finding end of answer rdata
@@ -458,7 +466,7 @@ def parse_dns_response(result, id, qlen):
             # for each record, print the IP address
             ip = hex_string[curr_ind:(curr_ind + 8)]
             ip_string = str(int(ip[0:2], 16)) + "." + str(int(ip[2:4], 16)) + "." + str(int(ip[4:6], 16)) + "." + str(int(ip[6:8], 16))
-            print("IP   " + ip_string + "   " + seconds_can_cache + "   " + isAuthoritative)
+            print("IP   " + ip_string + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
             curr_ind = curr_ind + 8
 
     # NS (name server) record
@@ -479,9 +487,9 @@ def parse_dns_response(result, id, qlen):
                 ns = label_to_string(hex_string[offset:])
 
                 if type_answer == "0002":
-                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 else:
-                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             if ns_type == "label-00":
 
@@ -489,9 +497,9 @@ def parse_dns_response(result, id, qlen):
                 ns = label_to_string(name_rdata)
                 
                 if type_answer == "0002":
-                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 else:
-                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 
             if ns_type == "label-p":
 
@@ -507,9 +515,9 @@ def parse_dns_response(result, id, qlen):
                 ns += label_to_string(hex_string[offset:])
 
                 if type_answer == "0002":
-                    print("NS   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 else:
-                    print("CNAME   " + ns + "   " + seconds_can_cache + "   " + isAuthoritative)
+                    print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             curr_ind = curr_ind + len(name_rdata)
 
@@ -535,14 +543,14 @@ def parse_dns_response(result, id, qlen):
                 # go to offset, and convert series of labels to string
                 ms = label_to_string(hex_string[offset:])
 
-                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             if ms_type == "label-00":
 
                 # just convert to string
                 ms = label_to_string(name_rdata)
                 
-                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 
             if ms_type == "label-p":
 
@@ -557,7 +565,7 @@ def parse_dns_response(result, id, qlen):
                 offset = binary_pointer[2:]
                 ms += label_to_string(hex_string[offset:])
 
-                print("MX   " + ms + "     " + preference + "   " + seconds_can_cache + "   " + isAuthoritative)
+                print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             curr_ind = curr_ind + len(name_rdata)
 
@@ -595,14 +603,15 @@ def packetCompression(hexdump):
     domname_type = ""
 
     # CASE 1 - POINTER
-    hex_to_int = int(hexdump, 16)               # convert to binary to check first two bits
+    hex_to_int = int(hexdump[:4], 16)               # convert to binary to check first two bits
     binary_string = bin(hex_to_int)[2:]         # Convert integer to binary string and remove "0b" prefix
 
-    if binary_string[:2] == "11":
+    if len(binary_string) == 16:
+        if binary_string[:2] == "11":
 
-        # first two bits to 1 allows pointers to be distinguished from labels
-        domname_type = "pointer"
-        return domname_type, hexdump[:4]
+            # first two bits to 1 allows pointers to be distinguished from labels
+            domname_type = "pointer"
+            return domname_type, hexdump[:4]
     
     indx = 0
     while indx < len(hexdump):
@@ -620,12 +629,14 @@ def packetCompression(hexdump):
             return domname_type, hexdump[:(indx_to_check + 2)]
         
         # CASE 3 - a sequence of labels ending with a pointer
+        ascii_to_check = hexdump[indx_to_check:(indx_to_check + 4)]
         hex_to_int = int(ascii_to_check, 16)                # convert to binary to check first two bits
         binary_string = bin(hex_to_int)[2:]                 # Convert integer to binary string and remove "0b" prefix
-        if binary_string[:2] == "11":
+        if len(binary_string) == 16:
+            if binary_string[:2] == "11":
 
-            domname_type = "label-p"
-            return domname_type, hexdump[:(indx_to_check + 4)]
+                domname_type = "label-p"
+                return domname_type, hexdump[:(indx_to_check + 4)]
 
         # increment and continue
         indx = indx_to_check
@@ -648,7 +659,7 @@ def main():
 
     # throw error if both flags given
     if args.mail_server and args.name_server:
-        print("ERROR\tBoth -mx and -ns cannot be given simultaneously.")
+        print("ERROR    Incorrect input syntax: Both -mx and -ns cannot be given simultaneously.")
         sys.exit(1)
 
     query_type = "A"
@@ -657,11 +668,60 @@ def main():
     elif args.name_server:
         query_type = "NS"
 
-    # ADD!!!!!
-    # ERROR <tab> Incorrect input syntax: [description of specific problem] ERROR <tab>
+    server = args.server
+    if args.server[0] == "@":
+        server = args.server[1:]
+    
+    isValidIP = True
+    parts = server.split('.')
+    
+    # Check if there are 4 parts
+    if len(parts) != 4:
+        isValidIP = False
+    
+    for part in parts:
+        # Check if each part is a number
+        if not part.isdigit():
+            isValidIP = False
+        
+        # Convert the part to an integer
+        num = int(part)
+        
+        # Check if the number is in the range 0-255
+        if num < 0 or num > 255:
+            isValidIP = False
+
+    if isValidIP == False:
+        print("ERROR    Incorrect input syntax: invalid IP, should be in format: xxx.xxx.xxx.xxx with xxx between 0-255")
+        sys.exit(1)
+
+    isValidDomName = True
+    # Check total length
+    if len(args.name) > 253:
+        isValidDomName = False
+    
+    # Split domain into labels
+    labels = args.name.split('.')
+    
+    # Ensure there are at least two parts (e.g., domain and TLD)
+    if len(labels) < 2:
+        isValidDomName = False
+
+    for label in labels:
+        # Each label should be 1-63 characters long
+        if not 1 <= len(label) <= 63:
+            isValidDomName = False
+            
+        # Check using regex if label is valid
+        if not re.match("^[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$", label):
+            isValidDomName = False
+
+    if isValidDomName == False:
+        print("ERROR    Incorrect input syntax: domain name format. Ensure it's composed of valid characters, doesn't start/end with a hyphen, and follows the length requirements.")
+        sys.exit(1)
 
     # send and parse result
-    result, id, qlen = send_dns_query(args.server, args.name, query_type, args.timeout, args.max_retries, args.port)
+    result, id, qlen = send_dns_query(server, args.name, query_type, args.timeout, args.max_retries, args.port)
     parse_dns_response(result, id, qlen)
 
 if __name__ == "__main__":
