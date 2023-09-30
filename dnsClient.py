@@ -296,9 +296,9 @@ def parse_dns_response(result, id, qlen):
                 # convery pointer to binary
                 binary_pointer = bin(int(name_rdata, 16))[2:]
                 # find offset
-                offset = binary_pointer[2:]
+                offset = 2 * int(binary_pointer[2:], 2)
                 # go to offset, and convert series of labels to string
-                ns = label_to_string(hex_string[offset:])
+                ns = label_to_string(hex_string[offset:], hex_string)
 
                 if type_answer == "0002":
                     print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
@@ -308,7 +308,7 @@ def parse_dns_response(result, id, qlen):
             if ns_type == "label-00":
 
                 # just convert to string
-                ns = label_to_string(name_rdata)
+                ns = label_to_string(name_rdata, hex_string)
                 
                 if type_answer == "0002":
                     print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
@@ -319,14 +319,14 @@ def parse_dns_response(result, id, qlen):
 
                 # add label half to nameserver
                 label_half = name_rdata[:-4]
-                ns = label_to_string(label_half + "00")
+                ns = label_to_string(label_half + "00", hex_string)
                 ns += "." 
 
                 # add pointer half to nameserver
                 pointer_half = name_rdata[-4:]
                 binary_pointer = bin(int(pointer_half, 16))[2:]
-                offset = binary_pointer[2:]
-                ns += label_to_string(hex_string[offset:])
+                offset = 2 * int(binary_pointer[2:], 2)
+                ns += label_to_string(hex_string[offset:], hex_string)
 
                 if type_answer == "0002":
                     print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
@@ -353,16 +353,16 @@ def parse_dns_response(result, id, qlen):
                 # convery pointer to binary
                 binary_pointer = bin(int(name_rdata, 16))[2:]
                 # find offset
-                offset = binary_pointer[2:]
+                offset = 2 * int(binary_pointer[2:], 2)
                 # go to offset, and convert series of labels to string
-                ms = label_to_string(hex_string[offset:])
+                ms = label_to_string(hex_string[offset:], hex_string)
 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             if ms_type == "label-00":
 
                 # just convert to string
-                ms = label_to_string(name_rdata)
+                ms = label_to_string(name_rdata, hex_string)
                 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 
@@ -370,14 +370,14 @@ def parse_dns_response(result, id, qlen):
 
                 # add label half to nameserver
                 label_half = name_rdata[:-4]
-                ms = label_to_string(label_half + "00")
+                ms = label_to_string(label_half + "00", hex_string)
                 ms += "." 
 
                 # add pointer half to nameserver
                 pointer_half = name_rdata[-4:]
                 binary_pointer = bin(int(pointer_half, 16))[2:]
-                offset = binary_pointer[2:]
-                ms += label_to_string(hex_string[offset:])
+                offset = 2 * int(binary_pointer[2:], 2)
+                ms += label_to_string(hex_string[offset:], hex_string)
 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
@@ -482,9 +482,9 @@ def parse_dns_response(result, id, qlen):
                 # convery pointer to binary
                 binary_pointer = bin(int(name_rdata, 16))[2:]
                 # find offset
-                offset = binary_pointer[2:]
+                offset = 2 * int(binary_pointer[2:], 2)
                 # go to offset, and convert series of labels to string
-                ns = label_to_string(hex_string[offset:])
+                ns = label_to_string(hex_string[offset:], hex_string)
 
                 if type_answer == "0002":
                     print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
@@ -494,7 +494,7 @@ def parse_dns_response(result, id, qlen):
             if ns_type == "label-00":
 
                 # just convert to string
-                ns = label_to_string(name_rdata)
+                ns = label_to_string(name_rdata, hex_string)
                 
                 if type_answer == "0002":
                     print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
@@ -505,14 +505,14 @@ def parse_dns_response(result, id, qlen):
 
                 # add label half to nameserver
                 label_half = name_rdata[:-4]
-                ns = label_to_string(label_half + "00")
+                ns = label_to_string(label_half + "00", hex_string)
                 ns += "." 
 
                 # add pointer half to nameserver
                 pointer_half = name_rdata[-4:]
                 binary_pointer = bin(int(pointer_half, 16))[2:]
-                offset = binary_pointer[2:]
-                ns += label_to_string(hex_string[offset:])
+                offset = 2 * int(binary_pointer[2:], 2)
+                ns += label_to_string(hex_string[offset:], hex_string)
 
                 if type_answer == "0002":
                     print("NS   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
@@ -539,16 +539,16 @@ def parse_dns_response(result, id, qlen):
                 # convery pointer to binary
                 binary_pointer = bin(int(name_rdata, 16))[2:]
                 # find offset
-                offset = binary_pointer[2:]
+                offset = 2 * int(binary_pointer[2:], 2)
                 # go to offset, and convert series of labels to string
-                ms = label_to_string(hex_string[offset:])
+                ms = label_to_string(hex_string[offset:], hex_string)
 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
             if ms_type == "label-00":
 
                 # just convert to string
-                ms = label_to_string(name_rdata)
+                ms = label_to_string(name_rdata, hex_string)
                 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
                 
@@ -556,14 +556,14 @@ def parse_dns_response(result, id, qlen):
 
                 # add label half to nameserver
                 label_half = name_rdata[:-4]
-                ms = label_to_string(label_half + "00")
+                ms = label_to_string(label_half + "00", hex_string)
                 ms += "." 
 
                 # add pointer half to nameserver
                 pointer_half = name_rdata[-4:]
                 binary_pointer = bin(int(pointer_half, 16))[2:]
-                offset = binary_pointer[2:]
-                ms += label_to_string(hex_string[offset:])
+                offset = 2 * int(binary_pointer[2:], 2)
+                ms += label_to_string(hex_string[offset:], hex_string)
 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
@@ -573,12 +573,27 @@ def parse_dns_response(result, id, qlen):
         print("ERROR    Unexpected response: unknown type error.")
 
 
-def label_to_string(hexdump):
+def label_to_string(hexdump, hex_string):
 
     name = ""
     indx = 0
 
     while indx < len(hexdump):
+
+        # check if pointer
+        # if there is, we recursively replace
+        hex_to_int = int(hexdump[indx:(indx + 4)], 16)               # convert to binary to check first two bits
+        binary_string = bin(hex_to_int)[2:]                          # Convert integer to binary string and remove "0b" prefix
+
+        if len(binary_string) == 16:
+            if binary_string[:2] == "11":
+
+                # find offset
+                offset = 2 * int(binary_string[2:], 2)
+                name += label_to_string(hex_string[offset:], hex_string)
+                return name
+
+        ##########
 
         # jump to next label
         ascii_to_check = hexdump[indx:(indx + 2)]
