@@ -242,52 +242,55 @@ def parse_dns_response(result, id, qlen):
         print("NOTFOUND - Answer Section")
         quit(0)
 
-    # NAME
-    answer_string = hex_string[(24 + qlen):]
-    domname_type, name = packetCompression(answer_string)
+    inx_answer = (24 + qlen)
+    for i in range(num_answers):
 
-    # TYPE
-    start_index_type = len(name) + (24 + qlen)
-    type_answer = hex_string[start_index_type:(start_index_type + 4)]
+        # NAME
+        answer_string = hex_string[inx_answer:]
+        domname_type, name = packetCompression(answer_string)
+
+        # TYPE
+        start_index_type = len(name) + inx_answer
+        type_answer = hex_string[start_index_type:(start_index_type + 4)]
 
 
-    # CLASS
-    start_index_class = start_index_type + 4
-    class_answer = hex_string[start_index_class:(start_index_class + 4)]
-    if class_answer != "0001":
-        print("ERROR    Unexpected response: query class not Internet address.")
+        # CLASS
+        start_index_class = start_index_type + 4
+        class_answer = hex_string[start_index_class:(start_index_class + 4)]
+        if class_answer != "0001":
+            print("ERROR    Unexpected response: query class not Internet address.")
 
-    # TTL
-    # number of seconds that this record may be cached before it should be discarded
-    start_index_ttl = start_index_class + 4
-    ttl = hex_string[start_index_ttl:(start_index_ttl + 8)]
-    seconds_can_cache = int(ttl, 16)
+        # TTL
+        # number of seconds that this record may be cached before it should be discarded
+        start_index_ttl = start_index_class + 4
+        ttl = hex_string[start_index_ttl:(start_index_ttl + 8)]
+        seconds_can_cache = int(ttl, 16)
 
-    # RDLENGTH
-    start_index_rdlength = start_index_ttl + 8
-    rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
-    num_octets = int(rdlength, 16)
+        # RDLENGTH
+        start_index_rdlength = start_index_ttl + 8
+        rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
+        num_octets = int(rdlength, 16)
 
-    # RDATA
-    start_index_rdata = start_index_rdlength + 4
-    num_records = int(ancount, 16)
+        # RDATA
+        start_index_rdata = start_index_rdlength + 4
+        # num_records = int(ancount, 16)
 
-    # A (IP address) records
-    if type_answer == "0001":
-        curr_ind = start_index_rdata
-        for i in range(num_records):
+        # A (IP address) records
+        if type_answer == "0001":
+            curr_ind = start_index_rdata
+            # for i in range(num_records):
 
             # for each record, print the IP address
             ip = hex_string[curr_ind:(curr_ind + 8)]
             ip_string = str(int(ip[0:2], 16)) + "." + str(int(ip[2:4], 16)) + "." + str(int(ip[4:6], 16)) + "." + str(int(ip[6:8], 16))
             print("IP   " + ip_string + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
-            curr_ind = curr_ind + 8
+            inx_answer = curr_ind + 8
 
-    # NS (name server) record
-    elif type_answer == "0002" or type_answer == "0005":
-        curr_ind = start_index_rdata
+        # NS (name server) record
+        elif type_answer == "0002" or type_answer == "0005":
+            curr_ind = start_index_rdata
 
-        for i in range(num_records):
+            #for i in range(num_records):
 
             ns_type, name_rdata = packetCompression(hex_string[curr_ind:])
 
@@ -333,14 +336,14 @@ def parse_dns_response(result, id, qlen):
                 else:
                     print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
-            curr_ind = curr_ind + len(name_rdata)
+            inx_answer = curr_ind + len(name_rdata)
 
-    # MX (mail server) records
-    elif type_answer == "000f":
+        # MX (mail server) records
+        elif type_answer == "000f":
 
-        curr_ind = start_index_rdata
+            curr_ind = start_index_rdata
 
-        for i in range(num_records):
+            # for i in range(num_records):
 
             # extract preferance
             preference = int(hex_string[curr_ind:(curr_ind + 4)], 16)
@@ -381,10 +384,10 @@ def parse_dns_response(result, id, qlen):
 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
-            curr_ind = curr_ind + len(name_rdata)
+            inx_answer = curr_ind + len(name_rdata)
 
-    else:
-        print("ERROR    Unexpected response: unknown type error.")
+        else:
+            print("ERROR    Unexpected response: unknown type error.")
 
 
     ######################################################
@@ -428,53 +431,52 @@ def parse_dns_response(result, id, qlen):
 
     start_index_additional = start_index_rdata + (num_octets * 2)
 
-    # NAME
-    Additional_string = hex_string[start_index_additional:]
-    domname_type, name_additional = packetCompression(Additional_string)
+    inx_answer = start_index_additional
+    for i in range(num_additional):
 
-    # TYPE
-    start_index_type = len(name_additional) + start_index_additional
-    type_answer = hex_string[start_index_type:(start_index_type + 4)]
+        # NAME
+        Additional_string = hex_string[inx_answer:]
+        domname_type, name_additional = packetCompression(Additional_string)
+
+        # TYPE
+        start_index_type = len(name_additional) + inx_answer
+        type_answer = hex_string[start_index_type:(start_index_type + 4)]
 
 
-    # CLASS
-    start_index_class = start_index_type + 4
-    class_answer = hex_string[start_index_class:(start_index_class + 4)]
-    if class_answer != "0001":
-        print("ERROR    Unexpected response: query class not Internet address.")
+        # CLASS
+        start_index_class = start_index_type + 4
+        class_answer = hex_string[start_index_class:(start_index_class + 4)]
+        if class_answer != "0001":
+            print("ERROR    Unexpected response: query class not Internet address.")
 
-    # TTL
-    # number of seconds that this record may be cached before it should be discarded
-    start_index_ttl = start_index_class + 4
-    ttl = hex_string[start_index_ttl:(start_index_ttl + 8)]
-    seconds_can_cache = int(ttl, 16)
+        # TTL
+        # number of seconds that this record may be cached before it should be discarded
+        start_index_ttl = start_index_class + 4
+        ttl = hex_string[start_index_ttl:(start_index_ttl + 8)]
+        seconds_can_cache = int(ttl, 16)
 
-    # RDLENGTH
-    start_index_rdlength = start_index_ttl + 8
-    rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
-    num_octets = int(rdlength, 16)
+        # RDLENGTH
+        start_index_rdlength = start_index_ttl + 8
+        rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
+        num_octets = int(rdlength, 16)
 
-    # RDATA
-    start_index_rdata = start_index_rdlength + 4
-    num_records = int(arcount, 16)
+        # RDATA
+        start_index_rdata = start_index_rdlength + 4
 
-    # A (IP address) records
-    if type_answer == "0001":
-        curr_ind = start_index_rdata
-        for i in range(num_records):
+        # A (IP address) records
+        if type_answer == "0001":
+            curr_ind = start_index_rdata
 
             # for each record, print the IP address
             ip = hex_string[curr_ind:(curr_ind + 8)]
             ip_string = str(int(ip[0:2], 16)) + "." + str(int(ip[2:4], 16)) + "." + str(int(ip[4:6], 16)) + "." + str(int(ip[6:8], 16))
             print("IP   " + ip_string + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
-            curr_ind = curr_ind + 8
+            inx_answer = curr_ind + 8
 
-    # NS (name server) record
-    elif type_answer == "0002" or type_answer == "0005":
-        curr_ind = start_index_rdata
+        # NS (name server) record
+        elif type_answer == "0002" or type_answer == "0005":
 
-        for i in range(num_records):
-
+            curr_ind = start_index_rdata
             ns_type, name_rdata = packetCompression(hex_string[curr_ind:])
 
             if ns_type == "pointer":
@@ -519,14 +521,12 @@ def parse_dns_response(result, id, qlen):
                 else:
                     print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
-            curr_ind = curr_ind + len(name_rdata)
+            inx_answer = curr_ind + len(name_rdata)
 
-    # MX (mail server) records
-    elif type_answer == "000f":
+        # MX (mail server) records
+        elif type_answer == "000f":
 
-        curr_ind = start_index_rdata
-
-        for i in range(num_records):
+            curr_ind = start_index_rdata
 
             # extract preferance
             preference = int(hex_string[curr_ind:(curr_ind + 4)], 16)
@@ -567,10 +567,10 @@ def parse_dns_response(result, id, qlen):
 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
-            curr_ind = curr_ind + len(name_rdata)
+            inx_answer = curr_ind + len(name_rdata)
 
-    else:
-        print("ERROR    Unexpected response: unknown type error.")
+        else:
+            print("ERROR    Unexpected response: unknown type error.")
 
 
 def label_to_string(hexdump, hex_string):
