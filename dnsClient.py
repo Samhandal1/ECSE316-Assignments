@@ -431,15 +431,15 @@ def parse_dns_response(result, id, qlen):
 
     start_index_additional = start_index_rdata + (num_octets * 2)
 
-    inx_answer = start_index_additional
+    inx_additional = start_index_additional
     for i in range(num_additional):
 
         # NAME
-        Additional_string = hex_string[inx_answer:]
+        Additional_string = hex_string[inx_additional:]
         domname_type, name_additional = packetCompression(Additional_string)
 
         # TYPE
-        start_index_type = len(name_additional) + inx_answer
+        start_index_type = len(name_additional) + inx_additional
         type_answer = hex_string[start_index_type:(start_index_type + 4)]
 
 
@@ -471,7 +471,7 @@ def parse_dns_response(result, id, qlen):
             ip = hex_string[curr_ind:(curr_ind + 8)]
             ip_string = str(int(ip[0:2], 16)) + "." + str(int(ip[2:4], 16)) + "." + str(int(ip[4:6], 16)) + "." + str(int(ip[6:8], 16))
             print("IP   " + ip_string + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
-            inx_answer = curr_ind + 8
+            inx_additional = curr_ind + 8
 
         # NS (name server) record
         elif type_answer == "0002" or type_answer == "0005":
@@ -521,7 +521,7 @@ def parse_dns_response(result, id, qlen):
                 else:
                     print("CNAME   " + ns + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
-            inx_answer = curr_ind + len(name_rdata)
+            inx_additional = curr_ind + len(name_rdata)
 
         # MX (mail server) records
         elif type_answer == "000f":
@@ -567,7 +567,7 @@ def parse_dns_response(result, id, qlen):
 
                 print("MX   " + ms + "     " + str(preference) + "   " + str(seconds_can_cache) + "   " + isAuthoritative)
 
-            inx_answer = curr_ind + len(name_rdata)
+            inx_additional = curr_ind + len(name_rdata)
 
         else:
             print("ERROR    Unexpected response: unknown type error.")
