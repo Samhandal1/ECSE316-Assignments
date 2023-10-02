@@ -5,7 +5,7 @@ import socket
 import random
 import re
 
-BUFFER = 1024
+BUFFER = 2048
 
 def parse_packet(server_name, query_type):
 
@@ -76,6 +76,8 @@ def parse_packet(server_name, query_type):
     # QCLASS (always use 0x0001 in this field, representing an Internet address)
     packet += "0001"
     qlen += 4
+
+    # print(packet)
 
     # convert to a bytes object
     byte_sequence = bytes.fromhex(packet)
@@ -402,28 +404,35 @@ def parse_dns_response(result, id, qlen):
         print("NOTFOUND - Additional Section")
         quit(0)
 
-    # NAME
-    # skip through by finding end of answer rdata
-    start_index_autority = start_index_rdata + (num_octets * 2)
-    autority_string = hex_string[start_index_autority:]
-    domname_type, name_autority = packetCompression(autority_string)
+    if nscount != "0000":
 
-    # TYPE
-    start_index_type = len(name_autority) + start_index_autority
+        # skip through by finding end of answer rdata
+        start_index_autority = start_index_rdata + (num_octets * 2)
 
-    # CLASS
-    start_index_class = start_index_type + 4
+        num_authority = int(nscount, 16)
+        for i in range(num_authority):
 
-    # TTL
-    start_index_ttl = start_index_class + 4
+            # NAME
+            autority_string = hex_string[start_index_autority:]
+            domname_type, name_autority = packetCompression(autority_string)
 
-    # RDLENGTH
-    start_index_rdlength = start_index_ttl + 8
-    rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
-    num_octets = int(rdlength, 16)
+            # TYPE
+            start_index_type = len(name_autority) + start_index_autority
 
-    # RDATA
-    start_index_rdata = start_index_rdlength + 4
+            # CLASS
+            start_index_class = start_index_type + 4
+
+            # TTL
+            start_index_ttl = start_index_class + 4
+
+            # RDLENGTH
+            start_index_rdlength = start_index_ttl + 8
+            rdlength = hex_string[start_index_rdlength:(start_index_rdlength + 4)]
+            num_octets = int(rdlength, 16)
+
+            # RDATA
+            start_index_rdata = start_index_rdlength + 4
+        
 
     ######################################################
     ### Additional #######################################
