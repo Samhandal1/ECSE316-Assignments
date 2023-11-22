@@ -30,20 +30,19 @@ def dft_2d(image):
     dft = np.zeros((M, N), dtype=complex)
 
     # Apply 1D DFT to each row
-    for u in range(M):
-        dft[u, :] = dft_1d(image[u, :])
+    for m in range(M):
+        dft[m, :] = dft_1d(image[m, :])
 
     # Apply 1D DFT to each column of the result
-    for v in range(N):
-        dft[:, v] = dft_1d(dft[:, v])
+    for n in range(N):
+        dft[:, n] = dft_1d(dft[:, n])
 
     return dft
 
-# Compute the one-dimensional Fast Fourier Transform using the Cooley-Tukey algorithm.
 def fft_1d(signal):
-    
+
     # signal: 1D array-like object containing the input signal (time-domain).
-    # return: 1D array representing the FFT (frequency-domain).
+    # return: 1D array representing the DFT (frequency-domain).
 
     N = len(signal)
 
@@ -56,37 +55,72 @@ def fft_1d(signal):
     even = fft_1d(signal[0::2])
     odd = fft_1d(signal[1::2])
 
-    # Combine step, combines the DFTs of the even and odd parts to produce the final DFT of the signal
-    
-    # For each k (representing the frequency bin), a complex exponential term is calculated: 
-    #   np.exp(-2j * np.pi * k / N)
-    # This term is multiplied by the corresponding element in the odd part. 
-    #   The modulo operation (k % (N//2)) ensures that the index stays within the bounds of the array
-    
-    T = [np.exp(-2j * np.pi * k / N) * odd[k % (N//2)] for k in range(N)]
+    # Prepare an array to hold the combined results
+    combined = [0] * N
 
-    # The final DFT is obtained by alternating additions and subtractions of the even and T (modified odd) parts
-    # - For the first half (k from 0 to N/2), elements from even and T are added.
-    # - For the second half (k from N/2 to N), elements from even and T are subtracted.
+    for k in range(N // 2):
 
-    return [even[k % (N//2)] + T[k] for k in range(N)] + [even[k % (N//2)] - T[k] for k in range(N)]
+        # Calculate the complex exponential term for the odd part
+        exp_term = np.exp(-2j * np.pi * k / N) * odd[k]
+
+        # Combine the even and odd parts
+        combined[k] = even[k] + exp_term
+        combined[k + N // 2] = even[k] - exp_term
+
+    return combined
+
+
+def ifft_1d(signal):
+
+    N = len(signal)
+    if N <= 1: 
+        return signal
+
+    even = ifft_1d(signal[0::2])
+    odd = ifft_1d(signal[1::2])
+
+    combined = [0] * N
+
+    for k in range(N // 2):
+
+        # sign change
+        exp_term = np.exp(2j * np.pi * k / N) * odd[k]
+        combined[k] = even[k] + exp_term
+        combined[k + N // 2] = even[k] - exp_term
+
+    # Normalize by dividing each element by N
+    return [x / N for x in combined]
+
 
 # Compute the two-dimensional Fast Fourier Transform.
-def fft_2d(image):
+def fft_2d(image, mode):
 
     # image: 2D array-like object representing the grayscale image.
     # return: 2D array representing the FFT of the image.
 
+    # Creates a MxN array of complex numbers, all initialized to 0
     M, N = image.shape
     fft = np.zeros((M, N), dtype=complex)
 
-    # Apply 1D FFT to each row
-    for u in range(M):
-        fft[u, :] = fft_1d(image[u, :])
+    if mode == "inverse":
 
-    # Apply 1D FFT to each column of the result
-    for v in range(N):
-        fft[:, v] = fft_1d(fft[:, v])
+        # Apply 1D FFT to each row
+        for m in range(M):
+            fft[m, :] = ifft_1d(image[m, :])
+
+        # Apply 1D FFT to each column of the result
+        for n in range(N):
+            fft[:, n] = ifft_1d(fft[:, n])
+
+    else:
+
+        # Apply 1D FFT to each row
+        for m in range(M):
+            fft[m, :] = fft_1d(image[m, :])
+
+        # Apply 1D FFT to each column of the result
+        for n in range(N):
+            fft[:, n] = fft_1d(fft[:, n])
 
     return fft
 
@@ -97,24 +131,51 @@ def fast_mode(image):
     # 1 - perform the FFT (break 2d into 1d)
     # 2 - output a 1 by 2 subplot of the original image next to its Fourier transform
 
-    ##################### IDK IF THIS WORKS ################################
-
     # Compute the 2D FFT using the custom implementation
-    f_transform = fft_2d(image)
-    magnitude_spectrum = np.log(np.abs(f_transform) + 1)  # Log scaling
+    f_transform = fft_2d(image, "normal")
 
-    # Plotting the original image and its FFT
-    plt.figure(figsize=(10, 4))
-    plt.subplot(1, 2, 1)
-    plt.imshow(image, cmap='gray')
-    plt.title("Original Image")
+    # Log scaling
+    log_scalled = np.log(np.abs(f_transform) + 1)
 
-    plt.subplot(1, 2, 2)
-    plt.imshow(np.fft.fftshift(magnitude_spectrum), norm=LogNorm(), cmap='gray')
-    plt.title("FFT (Log Scaled)")
-    plt.colorbar()
+    _, ax = plt.subplots(1, 2)
+    ax[0].imshow(image, cmap='gray')
+    ax[0].set_title("Original Image")
+
+    ax[1].imshow(log_scalled, norm=LogNorm(), cmap='gray')
+    ax[1].set_title("FFT (Log Scaled)")
 
     plt.show()
+
+# Apply a frequency filter to keep only low-frequency components.
+def low_pass_filter(f_transform, keep_fraction):
+
+    # Shift the zero-frequency component to the center of the spectrum
+    f_transform_shifted = np.fft.fftshift(f_transform)
+    
+    M, N = f_transform_shifted.shape
+
+    # Calculate the number of rows and columns to keep
+    rows_to_keep = int(M * keep_fraction)
+    cols_to_keep = int(N * keep_fraction)
+
+    # Create a mask with a central square/rectangle
+    # Initialize the mask to be all zeros
+    mask = np.zeros_like(f_transform_shifted, dtype=bool)
+
+    row_start = M // 2 - rows_to_keep // 2
+    row_end = row_start + rows_to_keep
+    col_start = N // 2 - cols_to_keep // 2
+    col_end = col_start + cols_to_keep
+
+    mask[row_start:row_end, col_start:col_end] = True
+
+    # Apply the mask to the Fourier Transform
+    filtered_f_transform = np.zeros_like(f_transform_shifted)
+    filtered_f_transform[mask] = f_transform_shifted[mask]
+
+    f_ishifted = np.fft.ifftshift(filtered_f_transform)
+
+    return f_ishifted
 
 # Implement the denoising logic
 def denoise_image(image):
@@ -124,7 +185,34 @@ def denoise_image(image):
     #   1.2 - set all the high frequencies to zero 
     #   1.3 - invert to get back the filtered original
     # 2 - output a 1 by 2 subplot of the original image next to its denoised version
-    pass
+
+    # Take the fft
+    f_transform = fft_2d(image, "normal")
+    N, M = f_transform.shape
+
+    f_transform = low_pass_filter(f_transform, 0.2)
+
+    # Count the non-zero frequencies and calculate the fraction
+    non_zeros = np.sum(f_transform != 0)
+    total_coefficients = N * M
+    fraction_non_zeros = non_zeros / total_coefficients
+
+    # Compute the inverse FFT
+    denoised_image = fft_2d(f_transform, "inverse").real
+
+    print("Number of non-zero coefficients: " + str(non_zeros))
+    print("Fraction of non-zero coefficients: " + str(fraction_non_zeros))
+
+    # output a 1 by 2 subplot of the original image next to its denoised version
+    _, ax = plt.subplots(1, 2)
+    ax[0].imshow(image, cmap='gray')
+    ax[0].set_title("Original Image")
+    
+    ax[1].imshow(denoised_image, cmap='gray')
+    ax[1].set_title("Denoised Image")
+
+    plt.show()
+
 
 # Implement the compression logic
 def compress_image(image):
@@ -144,6 +232,7 @@ def plot_runtime_graphs():
 
     # print in the command line the means and variances of the runtime of your algorithms versus the problem size
     pass
+
 
 # Helper: Check if a number is a power of two.
 def is_power_of_two(n):
@@ -175,6 +264,7 @@ def load_image(filename):
         image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
 
     return image
+
 
 if __name__ == "__main__":
 
