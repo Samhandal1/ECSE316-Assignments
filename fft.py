@@ -147,6 +147,7 @@ def fast_mode(image):
     plt.show()
 
 # Apply a frequency filter to keep only low-frequency components.
+# logic found: https://sbme-tutorials.github.io/2021/cv/notes/2_week2.html#:~:text=Discrete%20Fourier%20Transform%20(DFT),-Fourier%20transform%20is&text=Low%20frequency%20components%20are%20found,frequency%20components%20are%20in%20peripherals.
 def low_pass_filter(f_transform, keep_fraction):
 
     # Shift the zero-frequency component to the center of the spectrum
