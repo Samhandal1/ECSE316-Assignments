@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import argparse
 import cv2
+import time
 
 # Compute the one-dimensional discrete Fourier transform.
 def dft_1d(signal):
@@ -19,6 +20,7 @@ def dft_1d(signal):
             dft[k] += signal[n] * np.exp(angle)
 
     return dft
+
 
 # Compute the two-dimensional discrete Fourier transform.
 def dft_2d(image):
@@ -38,6 +40,7 @@ def dft_2d(image):
         dft[:, n] = dft_1d(dft[:, n])
 
     return dft
+
 
 def fft_1d(signal):
 
@@ -144,7 +147,29 @@ def fast_mode(image):
     ax[1].imshow(log_scalled, norm=LogNorm(), cmap='gray')
     ax[1].set_title("FFT (Log Scaled)")
 
+    plt.savefig('fast_mode.png', bbox_inches='tight')
     plt.show()
+
+
+# Use built in FFT and display the frequency domain image
+def fast_mode_builtin(image):
+
+    # Compute the 2D FFT using the custom implementation
+    f_transform = np.fft.fft2(image)
+
+    # Log scaling
+    log_scalled = np.log(np.abs(f_transform) + 1)
+
+    _, ax = plt.subplots(1, 2)
+    ax[0].imshow(image, cmap='gray')
+    ax[0].set_title("Original Image")
+
+    ax[1].imshow(log_scalled, norm=LogNorm(), cmap='gray')
+    ax[1].set_title("FFT (Log Scaled)")
+
+    plt.savefig('fast_mode_builtin.png', bbox_inches='tight')
+    plt.show()
+
 
 # Apply a frequency filter to keep only low-frequency components.
 # logic found: https://sbme-tutorials.github.io/2021/cv/notes/2_week2.html#:~:text=Discrete%20Fourier%20Transform%20(DFT),-Fourier%20transform%20is&text=Low%20frequency%20components%20are%20found,frequency%20components%20are%20in%20peripherals.
@@ -177,6 +202,7 @@ def low_pass_filter(f_transform, keep_fraction):
     f_ishifted = np.fft.ifftshift(filtered_f_transform)
 
     return f_ishifted
+
 
 # Implement the denoising logic
 def denoise_image(image):
@@ -212,7 +238,69 @@ def denoise_image(image):
     ax[1].imshow(denoised_image, cmap='gray')
     ax[1].set_title("Denoised Image")
 
+    plt.savefig('denoise_image.png', bbox_inches='tight')
     plt.show()
+
+
+# Implement the compression logic
+# Threshold the coefficients’ magnitude and take only the largest percentile of them
+def compress_image_keep_high(image, keep_fraction):
+
+    # Perform FFT and shift the zero frequency component to the center
+    f_transform = fft_2d(image, "normal")
+    f_shifted = np.fft.fftshift(f_transform)
+
+    # Compute magnitudes and determine the threshold
+    magnitudes = np.abs(f_shifted)
+    threshold = np.percentile(magnitudes, (1 - keep_fraction) * 100)
+
+    # Apply the threshold
+    f_shifted[magnitudes < threshold] = 0
+
+    # Count the number of non-zero coefficients
+    non_zero_count = np.sum(f_shifted != 0)
+
+    # Inverse FFT to get the compressed image
+    f_ishifted = np.fft.ifftshift(f_shifted)
+    compressed_image = fft_2d(f_ishifted, "inverse").real
+
+    return compressed_image, non_zero_count
+
+
+# Implement the compression logic
+# Keep all the coefficients of very low frequencies as well as a fraction of the largest coefficients from higher frequencies
+def compress_image_keep_middle(image, keep_fraction):
+
+    # Perform FFT and shift the zero frequency component to the center
+    f_transform = fft_2d(image, "normal")
+    f_shifted = np.fft.fftshift(f_transform)
+
+    keep_fraction_low = (keep_fraction) * 50
+    keep_fraction_high = 100 - (keep_fraction) * 50
+
+    # Compute magnitudes
+    magnitudes = np.abs(f_shifted)
+
+    # Define the range for keeping frequencies
+    low_freq_cutoff = np.percentile(magnitudes, keep_fraction_low)  # Lower half
+    high_freq_cutoff = np.percentile(magnitudes, keep_fraction_high)  # Upper half
+
+    # Create masks based on the cutoffs
+    low_freq_mask = magnitudes < low_freq_cutoff
+    high_freq_mask = magnitudes > high_freq_cutoff
+    combined_mask = low_freq_mask | high_freq_mask
+
+    # Apply the mask
+    f_shifted[~combined_mask] = 0
+
+    # Count the number of non-zero coefficients
+    non_zero_count = np.sum(combined_mask)
+
+    # Inverse FFT to get the compressed image
+    f_ishifted = np.fft.ifftshift(f_shifted)
+    compressed_image = fft_2d(f_ishifted, "inverse").real
+
+    return compressed_image, non_zero_count
 
 
 # Implement the compression logic
@@ -226,13 +314,81 @@ def compress_image(image):
     #   1.3 - inverse transform the modified Fourier coefficients
     # 2 - output a 2 by 3 subplot of the image at 6 different compression levels
     # 3 - print in the command line the number of non zeros that are in each of the 6 images
-    pass
+    # Compute the Fourier Transform
+
+    compression_levels = [0.01, 0.02, 0.05, 0.1, 0.50, 0.999]
+    _, ax = plt.subplots(2, 3, figsize=(15, 10))
+    ax = ax.ravel()
+
+    for i in range(len(compression_levels)):
+        compressed_image, non_zeros = compress_image_keep_high(image, compression_levels[i])
+        ax[i].imshow(compressed_image, cmap='gray')
+        ax[i].set_title("Compression: " + str(compression_levels[i] * 100) + "% Non-zeros: " + str(non_zeros))
+        print("Compression level " + str(compression_levels[i] * 100) + "% - Non-zero coefficients: " + str(non_zeros))
+
+    plt.savefig('compression_levels_high_2.png', bbox_inches='tight')
+
 
 # Implement runtime analysis and plotting
 def plot_runtime_graphs():
 
     # print in the command line the means and variances of the runtime of your algorithms versus the problem size
-    pass
+    
+    # Define different image sizes (powers of two from 2^5 to 2^9)
+    image_sizes = [2**i for i in range(5, 10)]
+
+    # Lists to store mean runtimes and standard deviations
+    means_dft, stds_dft = [], []
+    means_fft, stds_fft = [], []
+
+    num_experiments = 10  # Number of experiments for each size
+
+    # Measure runtime for each size
+    for size in image_sizes:
+        runtimes_dft = []
+        runtimes_fft = []
+
+        for _ in range(num_experiments):
+            # Create a random 2D array (image)
+            test_image = np.random.rand(size, size)
+
+            # Measure runtime for DFT 2D
+            start = time.time()
+            dft_2d(test_image)
+            runtimes_dft.append(time.time() - start)
+
+            # Measure runtime for FFT 2D
+            start = time.time()
+            fft_2d(test_image, "normal")
+            runtimes_fft.append(time.time() - start)
+
+        # Calculate mean and standard deviation for DFT and FFT
+        means_dft.append(np.mean(runtimes_dft))
+        stds_dft.append(np.std(runtimes_dft))
+
+        means_fft.append(np.mean(runtimes_fft))
+        stds_fft.append(np.std(runtimes_fft))
+
+    # Plotting
+    plt.figure(figsize=(12, 8))
+    plt.errorbar(image_sizes, means_dft, yerr=[2*std for std in stds_dft], label='DFT 2D', marker='o', capsize=5)
+    plt.errorbar(image_sizes, means_fft, yerr=[2*std for std in stds_fft], label='FFT 2D', marker='o', capsize=5)
+
+    plt.xlabel('Image Size (N x N)')
+    plt.ylabel('Runtime (seconds)')
+    plt.xscale('log', base=2)  # Log scale for x-axis
+    plt.yscale('log')  # Log scale for y-axis
+    plt.title('Runtime Analysis of DFT vs FFT (with 97% Confidence Interval)')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('runtime_analysis_with_confidence_29.png')
+    plt.show()
+
+    # Print mean and variance
+    print("Mean Runtimes and Standard Deviations:")
+    for size, mean_dft, std_dft, mean_fft, std_fft in zip(image_sizes, means_dft, stds_dft, means_fft, stds_fft):
+        print("Size "+ str(size) + "x" + str(size) + " - DFT Mean: " + str(mean_dft) + ", DFT Std Dev: " + str(std_dft) + ", FFT Mean: " + str(mean_fft) + ", FFT Std Dev: " + str(std_fft))
+
 
 
 # Helper: Check if a number is a power of two.
