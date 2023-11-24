@@ -172,7 +172,6 @@ def fast_mode_builtin(image):
 
 
 # Apply a frequency filter to keep only low-frequency components.
-# logic found: https://sbme-tutorials.github.io/2021/cv/notes/2_week2.html#:~:text=Discrete%20Fourier%20Transform%20(DFT),-Fourier%20transform%20is&text=Low%20frequency%20components%20are%20found,frequency%20components%20are%20in%20peripherals.
 def low_pass_filter(f_transform, keep_fraction):
 
     # Shift the zero-frequency component to the center of the spectrum
@@ -196,11 +195,88 @@ def low_pass_filter(f_transform, keep_fraction):
     mask[row_start:row_end, col_start:col_end] = True
 
     # Apply the mask to the Fourier Transform
-    filtered_f_transform = np.zeros_like(f_transform_shifted)
-    filtered_f_transform[mask] = f_transform_shifted[mask]
+    f_transform_shifted[mask == False] = 0
 
-    f_ishifted = np.fft.ifftshift(filtered_f_transform)
+    f_ishifted = np.fft.ifftshift(f_transform_shifted)
 
+    return f_ishifted
+
+
+# Apply a frequency filter to keep only high-frequency components by removing low-frequency components.
+def high_pass_filter(f_transform, keep_fraction):
+    
+    # Shift the zero-frequency component to the center of the spectrum
+    f_transform_shifted = np.fft.fftshift(f_transform)
+    
+    M, N = f_transform_shifted.shape
+
+    # Calculate the number of rows and columns to cut based on the keep_fraction
+    # This will create a square in the middle of the spectrum where frequencies will be set to zero
+    rows_to_cut = int(M * (1 - keep_fraction) / 2)
+    cols_to_cut = int(N * (1 - keep_fraction) / 2)
+
+    # Create a mask where the center square is False (low frequencies) and the rest is True (high frequencies)
+    mask = np.ones_like(f_transform_shifted, dtype=bool)
+
+    row_start = M//2 - rows_to_cut
+    row_end = M//2 + rows_to_cut
+    col_start = N//2 - cols_to_cut
+    col_end = N//2 + cols_to_cut
+
+    mask[row_start:row_end, col_start:col_end] = False
+
+    # Apply the mask to the Fourier Transform
+    f_transform_shifted[mask == False] = 0
+
+    f_ishifted = np.fft.ifftshift(f_transform_shifted)
+
+    return f_ishifted
+
+
+# Apply a frequency filter that thresholds everything below a certain magnitude.
+def threshold_filter(f_transform, keep_fraction):
+
+    # Compute magnitudes and determine the threshold
+    magnitudes = np.abs(f_transform)
+    threshold = np.percentile(magnitudes, (1 - keep_fraction) * 100)
+
+    # Create a mask for values where the magnitude is greater than the threshold
+    mask = magnitudes > threshold
+
+    # Apply the mask to the Fourier Transform to zero out small coefficients
+    f_transform_filtered = np.zeros_like(f_transform)
+    f_transform_filtered[mask] = f_transform[mask]
+
+    return f_transform_filtered
+
+
+# Apply a frequency filter to keep a specific band of frequencies, defined by low_fraction and high_fraction,
+# and zero out all other frequencies outside this band.
+def band_pass_filter(f_transform, low_fraction, high_fraction):
+    
+    # Shift the zero-frequency component to the center of the spectrum
+    f_transform_shifted = np.fft.fftshift(f_transform)
+    
+    M, N = f_transform_shifted.shape
+
+    # Calculate the cutoff indices for low and high frequencies
+    low_cutoff = int(min(low_fraction, high_fraction) * min(M, N) / 2)
+    high_cutoff = int(max(low_fraction, high_fraction) * min(M, N) / 2)
+
+    # Initialize the mask to True (to keep the frequencies)
+    mask = np.ones_like(f_transform_shifted, dtype=bool)
+
+    # Set the frequencies outside the band to False in the mask to zero them out
+    center_M, center_N = M // 2, N // 2
+    mask[:center_M - high_cutoff, :] = False
+    mask[center_M + high_cutoff:, :] = False
+    mask[:, :center_N - high_cutoff] = False
+    mask[:, center_N + high_cutoff:] = False
+    mask[center_M - low_cutoff:center_M + low_cutoff, center_N - low_cutoff:center_N + low_cutoff] = True
+
+    # Apply the mask to the Fourier Transform
+    f_transform_shifted[mask == False] = 0
+    f_ishifted = np.fft.ifftshift(f_transform_shifted)
     return f_ishifted
 
 
@@ -236,9 +312,9 @@ def denoise_image(image):
     ax[0].set_title("Original Image")
     
     ax[1].imshow(denoised_image, cmap='gray')
-    ax[1].set_title("Denoised Image")
+    ax[1].set_title("Denoised Image (band_pass_filter)")
 
-    plt.savefig('denoise_image.png', bbox_inches='tight')
+    plt.savefig('denoise_image_band_pass_filter.png', bbox_inches='tight')
     plt.show()
 
 
@@ -388,7 +464,6 @@ def plot_runtime_graphs():
     print("Mean Runtimes and Standard Deviations:")
     for size, mean_dft, std_dft, mean_fft, std_fft in zip(image_sizes, means_dft, stds_dft, means_fft, stds_fft):
         print("Size "+ str(size) + "x" + str(size) + " - DFT Mean: " + str(mean_dft) + ", DFT Std Dev: " + str(std_dft) + ", FFT Mean: " + str(mean_fft) + ", FFT Std Dev: " + str(std_fft))
-
 
 
 # Helper: Check if a number is a power of two.
