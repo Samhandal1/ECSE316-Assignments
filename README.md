@@ -11,7 +11,7 @@ Overview: This assignment involves implementing a DNS client using Python socket
 - Output Specification: Ensure the program outputs a standardized response format, detailing the query, performance, and content of the DNS response.
 
 ## Assignment 2: Fast Fourier Transform and Applications
-Overview: This assignment focuses on implementing two versions of the Discrete Fourier Transform (DFT) - a brute force approach and a Fast Fourier Transform (FFT) approach using Cooley-Tukey algorithm. Students explore the application of FFT in image denoising and compression.
+Overview: This assignment focuses on implementing two versions of the Discrete Fourier Transform (DFT) - a brute force approach and a Fast Fourier Transform (FFT) approach using Cooley-Tukey algorithm. Explored the application of FFT in image denoising and compression.
 
 ### Tasks:
 
